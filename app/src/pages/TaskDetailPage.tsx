@@ -33,7 +33,7 @@ import {
   formatBytes,
 } from "@/lib/format";
 import { formatDateTime, initials, formatRelative } from "@/lib/utils";
-import { getSignedUrl, uploadTaskFile } from "@/lib/storage";
+import { downloadTaskFile, uploadTaskFile } from "@/lib/storage";
 import type {
   Profile,
   Task,
@@ -538,8 +538,7 @@ function AttachmentRow({ attachment }: { attachment: TaskAttachment }) {
   const onDownload = async () => {
     setLoading(true);
     try {
-      const url = await getSignedUrl(attachment.storage_path);
-      window.open(url, "_blank");
+      await downloadTaskFile(attachment.storage_path, attachment.file_name);
     } catch (err) {
       const e = err as { message?: string };
       toast.error(e.message ?? "Không tải được file");

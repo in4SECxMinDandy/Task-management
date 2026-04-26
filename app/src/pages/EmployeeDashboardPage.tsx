@@ -51,6 +51,12 @@ export function EmployeeDashboardPage() {
   const completed = data.filter((t) => t.status === "approved");
   const overdue = data.filter((t) => isOverdue(t.deadline, t.status));
 
+  const urgentList = Array.from(
+    new Map(
+      [...overdue, ...pending, ...inProgress].map((t) => [t.id, t]),
+    ).values(),
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -76,7 +82,7 @@ export function EmployeeDashboardPage() {
           <CardTitle>Cần làm gấp</CardTitle>
         </CardHeader>
         <CardContent>
-          {[...overdue, ...pending, ...inProgress].length === 0 ? (
+          {urgentList.length === 0 ? (
             <EmptyState
               size="inline"
               icon={CheckCircle2}
@@ -85,7 +91,7 @@ export function EmployeeDashboardPage() {
             />
           ) : (
             <ul className="space-y-2">
-              {[...overdue, ...pending, ...inProgress].slice(0, 8).map((t) => {
+              {urgentList.slice(0, 8).map((t) => {
                 const od = isOverdue(t.deadline, t.status);
                 return (
                   <li key={t.id}>
