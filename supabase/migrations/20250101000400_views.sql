@@ -2,7 +2,9 @@
 -- View: employee_performance — aggregated stats used in admin dashboard.
 -- ============================================================================
 
-create or replace view public.employee_performance as
+create or replace view public.employee_performance
+  with (security_invoker = true)
+as
 select
   p.id,
   p.full_name,
