@@ -10,6 +10,7 @@ import {
   Bell,
   ChevronLeft,
   CheckCircle2,
+  ScrollText,
 } from "lucide-react";
 import { useState } from "react";
 import { cn, initials } from "@/lib/utils";
@@ -38,6 +39,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Tổng quan", icon: LayoutDashboard },
   { to: "/tasks", label: "Công việc", icon: ListTodo },
   { to: "/employees", label: "Nhân viên", icon: Users, adminOnly: true },
+  { to: "/audit-log", label: "Nhật ký quản trị", icon: ScrollText, adminOnly: true },
   { to: "/settings", label: "Cài đặt", icon: SettingsIcon },
 ];
 

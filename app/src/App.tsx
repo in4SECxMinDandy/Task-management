@@ -9,6 +9,7 @@ import { AdminDashboardPage } from "@/pages/admin/AdminDashboardPage";
 import { EmployeeDashboardPage } from "@/pages/EmployeeDashboardPage";
 import { EmployeesPage } from "@/pages/admin/EmployeesPage";
 import { EmployeeDetailPage } from "@/pages/admin/EmployeeDetailPage";
+import { AuditLogPage } from "@/pages/admin/AuditLogPage";
 import { TasksPage } from "@/pages/TasksPage";
 import { TaskDetailPage } from "@/pages/TaskDetailPage";
 import { SettingsPage } from "@/pages/SettingsPage";
@@ -38,6 +39,7 @@ export default function App() {
             <Route element={<RequireRole role="admin" />}>
               <Route path="employees" element={<EmployeesPage />} />
               <Route path="employees/:id" element={<EmployeeDetailPage />} />
+              <Route path="audit-log" element={<AuditLogPage />} />
             </Route>
           </Route>
         </Route>

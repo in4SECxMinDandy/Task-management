@@ -83,6 +83,15 @@ export interface TaskHistory {
   at: string;
 }
 
+export interface AdminAuditLogEntry {
+  id: string;
+  actor_id: string | null;
+  action: string;
+  target_id: string | null;
+  payload: Record<string, unknown> | null;
+  created_at: string;
+}
+
 export interface Notification {
   id: string;
   user_id: string;
@@ -162,6 +171,11 @@ export interface Database {
           message: string;
         };
         Update: Partial<Notification>;
+      };
+      admin_audit_log: {
+        Row: AdminAuditLogEntry;
+        Insert: Partial<AdminAuditLogEntry> & { action: string };
+        Update: Partial<AdminAuditLogEntry>;
       };
     };
     Views: {
