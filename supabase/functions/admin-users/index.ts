@@ -138,6 +138,63 @@ serve(async (req) => {
         if (!user_id) {
           return jsonResponse({ error: "missing_user_id" }, { status: 400 });
         }
+
+        // Self-demotion / self-disable guard: prevent the caller from
+        // accidentally locking themselves out of the admin tooling.
+        if (user_id === callerId) {
+          if (role === "employee") {
+            return jsonResponse(
+              { error: "cannot_demote_self" },
+              { status: 400 },
+            );
+          }
+          if (is_active === false) {
+            return jsonResponse(
+              { error: "cannot_disable_self" },
+              { status: 400 },
+            );
+          }
+        }
+
+        // Last-admin guard: refuse to demote / disable the only remaining
+        // active admin so the system never ends up with zero admins.
+        const wouldRemoveAdmin =
+          role === "employee" || is_active === false;
+        if (wouldRemoveAdmin) {
+          const { data: target, error: targetErr } = await admin
+            .from("profiles")
+            .select("role, is_active")
+            .eq("id", user_id)
+            .maybeSingle();
+          if (targetErr) {
+            return jsonResponse(
+              { error: "target_lookup_failed", detail: targetErr.message },
+              { status: 500 },
+            );
+          }
+          const targetIsActiveAdmin =
+            target?.role === "admin" && target?.is_active === true;
+          if (targetIsActiveAdmin) {
+            const { count, error: countErr } = await admin
+              .from("profiles")
+              .select("id", { count: "exact", head: true })
+              .eq("role", "admin")
+              .eq("is_active", true);
+            if (countErr) {
+              return jsonResponse(
+                { error: "admin_count_failed", detail: countErr.message },
+                { status: 500 },
+              );
+            }
+            if ((count ?? 0) <= 1) {
+              return jsonResponse(
+                { error: "cannot_remove_last_admin" },
+                { status: 400 },
+              );
+            }
+          }
+        }
+
         const update: Record<string, unknown> = {};
         if (full_name !== undefined) update.full_name = full_name;
         if (role !== undefined) {
@@ -186,6 +243,42 @@ serve(async (req) => {
         // Soft delete: keep history but disable login.
         const { user_id } = body as { user_id: string };
         if (!user_id) return jsonResponse({ error: "missing_user_id" }, { status: 400 });
+        if (user_id === callerId) {
+          return jsonResponse({ error: "cannot_delete_self" }, { status: 400 });
+        }
+
+        // Refuse to soft-delete the only remaining active admin.
+        const { data: target, error: targetErr } = await admin
+          .from("profiles")
+          .select("role, is_active")
+          .eq("id", user_id)
+          .maybeSingle();
+        if (targetErr) {
+          return jsonResponse(
+            { error: "target_lookup_failed", detail: targetErr.message },
+            { status: 500 },
+          );
+        }
+        if (target?.role === "admin" && target?.is_active === true) {
+          const { count, error: countErr } = await admin
+            .from("profiles")
+            .select("id", { count: "exact", head: true })
+            .eq("role", "admin")
+            .eq("is_active", true);
+          if (countErr) {
+            return jsonResponse(
+              { error: "admin_count_failed", detail: countErr.message },
+              { status: 500 },
+            );
+          }
+          if ((count ?? 0) <= 1) {
+            return jsonResponse(
+              { error: "cannot_remove_last_admin" },
+              { status: 400 },
+            );
+          }
+        }
+
         await admin.from("profiles").update({ is_active: false }).eq("id", user_id);
         await admin.auth.admin.updateUserById(user_id, { ban_duration: "876000h" });
         return jsonResponse({ ok: true });
