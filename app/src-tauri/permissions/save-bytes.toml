@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-save-bytes"
+description = "Allow the frontend to call the save_bytes Tauri command, which writes a Uint8Array to a user-chosen file path."
+commands.allow = ["save_bytes"]
