@@ -34,6 +34,34 @@ function jsonResponse(body: unknown, init: ResponseInit = {}) {
   });
 }
 
+// Append a row to admin_audit_log. Best-effort: if logging itself fails we
+// log to the function's stderr but still return success to the caller, since
+// the underlying admin action already succeeded. The payload is the raw
+// request body with anything resembling a password redacted.
+async function recordAudit(
+  client: ReturnType<typeof createClient>,
+  actorId: string,
+  action: string,
+  targetId: string | null,
+  payload: Record<string, unknown>,
+) {
+  const safePayload: Record<string, unknown> = { ...payload };
+  for (const k of Object.keys(safePayload)) {
+    if (/password/i.test(k)) safePayload[k] = "[redacted]";
+  }
+  delete safePayload.action;
+  const { error } = await client.from("admin_audit_log").insert({
+    actor_id: actorId,
+    action,
+    target_id: targetId,
+    payload: safePayload,
+  });
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.error("admin_audit_log insert failed", error);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: cors });
@@ -124,6 +152,7 @@ serve(async (req) => {
         if (insErr) {
           return jsonResponse({ error: "create_profile_failed", detail: insErr.message }, { status: 500 });
         }
+        await recordAudit(admin, callerId, "create_user", created.user!.id, body);
         return jsonResponse({ user_id: created.user!.id });
       }
 
@@ -218,6 +247,7 @@ serve(async (req) => {
         } else if (is_active === true) {
           await admin.auth.admin.updateUserById(user_id, { ban_duration: "none" });
         }
+        await recordAudit(admin, callerId, "update_user", user_id, body);
         return jsonResponse({ ok: true });
       }
 
@@ -236,6 +266,7 @@ serve(async (req) => {
           return jsonResponse({ error: "reset_failed", detail: error.message }, { status: 500 });
         }
         await admin.from("profiles").update({ must_change_password: true }).eq("id", user_id);
+        await recordAudit(admin, callerId, "reset_password", user_id, body);
         return jsonResponse({ ok: true });
       }
 
@@ -281,6 +312,7 @@ serve(async (req) => {
 
         await admin.from("profiles").update({ is_active: false }).eq("id", user_id);
         await admin.auth.admin.updateUserById(user_id, { ban_duration: "876000h" });
+        await recordAudit(admin, callerId, "delete_user", user_id, body);
         return jsonResponse({ ok: true });
       }
 
