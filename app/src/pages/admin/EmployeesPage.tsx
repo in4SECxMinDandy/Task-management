@@ -39,10 +39,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { adminUpdateUser } from "@/lib/admin";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 export function EmployeesPage() {
   const qc = useQueryClient();
+  const { profile: me } = useAuth();
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Profile | null>(null);
@@ -181,14 +183,18 @@ export function EmployeesPage() {
                           <DropdownMenuItem onClick={() => setResetting(p)}>
                             <RefreshCw className="h-4 w-4" /> Đặt lại mật khẩu
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className={p.is_active ? "text-destructive focus:text-destructive" : ""}
-                            onClick={() => setDisabling(p)}
-                          >
-                            <ShieldOff className="h-4 w-4" />
-                            {p.is_active ? "Vô hiệu hóa" : "Kích hoạt lại"}
-                          </DropdownMenuItem>
+                          {p.id !== me?.id && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className={p.is_active ? "text-destructive focus:text-destructive" : ""}
+                                onClick={() => setDisabling(p)}
+                              >
+                                <ShieldOff className="h-4 w-4" />
+                                {p.is_active ? "Vô hiệu hóa" : "Kích hoạt lại"}
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>

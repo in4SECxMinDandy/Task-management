@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { adminUpdateUser } from "@/lib/admin";
+import { useAuth } from "@/contexts/AuthContext";
 import type { Profile } from "@/types/database";
 
 interface Props {
@@ -23,6 +24,8 @@ interface Props {
 
 export function EditUserDialog({ profile, onOpenChange }: Props) {
   const qc = useQueryClient();
+  const { profile: me } = useAuth();
+  const isSelf = !!profile && profile.id === me?.id;
   const [fullName, setFullName] = useState("");
   const [department, setDepartment] = useState("");
   const [role, setRole] = useState<"admin" | "employee">("employee");
@@ -86,7 +89,11 @@ export function EditUserDialog({ profile, onOpenChange }: Props) {
             </div>
             <div className="grid gap-2">
               <Label>Vai trò</Label>
-              <Select value={role} onValueChange={(v) => setRole(v as "admin" | "employee")}>
+              <Select
+                value={role}
+                onValueChange={(v) => setRole(v as "admin" | "employee")}
+                disabled={isSelf}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -95,6 +102,11 @@ export function EditUserDialog({ profile, onOpenChange }: Props) {
                   <SelectItem value="admin">Quản trị viên</SelectItem>
                 </SelectContent>
               </Select>
+              {isSelf && (
+                <p className="text-xs text-muted-foreground">
+                  Không thể tự đổi vai trò của chính mình.
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter>
