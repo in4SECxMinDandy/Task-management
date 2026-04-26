@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Clock,
   ListTodo,
+  Plus,
   Star,
   TrendingUp,
   Users,
@@ -25,6 +26,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/lib/supabase";
@@ -35,6 +39,17 @@ import type {
   Task,
   TaskStatus,
 } from "@/types/database";
+
+function assigneeNames(
+  assignees: Array<{ user: { full_name: string } | null }>,
+): string {
+  const names = assignees
+    .map((a) => a.user?.full_name)
+    .filter((n): n is string => !!n);
+  if (names.length === 0) return "—";
+  if (names.length <= 2) return names.join(", ");
+  return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+}
 
 function performanceStars(score: number | null) {
   if (score == null) return 0;
@@ -69,42 +84,42 @@ export function AdminDashboardPage() {
     },
   });
 
-  const upcomingQ = useQuery({
+  type DashTask = Pick<Task, "id" | "title" | "deadline" | "status"> & {
+    assignees: Array<{ user: { full_name: string } | null }>;
+  };
+
+  const upcomingQ = useQuery<DashTask[]>({
     queryKey: ["admin-upcoming"],
     queryFn: async () => {
       const now = new Date().toISOString();
       const in3d = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString();
       const { data, error } = await supabase
         .from("tasks")
-        .select("id, title, deadline, status, assigned_to, profiles:assigned_to(full_name)")
+        .select(
+          "id, title, deadline, status, assignees:task_assignees(user:profiles!task_assignees_user_id_fkey(full_name))",
+        )
         .gte("deadline", now)
         .lte("deadline", in3d)
         .in("status", ["pending", "in_progress", "submitted"])
         .order("deadline");
       if (error) throw error;
-      return data as unknown as Array<
-        Pick<Task, "id" | "title" | "deadline" | "status" | "assigned_to"> & {
-          profiles: { full_name: string } | null;
-        }
-      >;
+      return (data ?? []) as unknown as DashTask[];
     },
   });
 
-  const overdueQ = useQuery({
+  const overdueQ = useQuery<DashTask[]>({
     queryKey: ["admin-overdue"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tasks")
-        .select("id, title, deadline, status, assigned_to, profiles:assigned_to(full_name)")
+        .select(
+          "id, title, deadline, status, assignees:task_assignees(user:profiles!task_assignees_user_id_fkey(full_name))",
+        )
         .lt("deadline", new Date().toISOString())
         .in("status", ["pending", "in_progress"])
         .order("deadline");
       if (error) throw error;
-      return data as unknown as Array<
-        Pick<Task, "id" | "title" | "deadline" | "status" | "assigned_to"> & {
-          profiles: { full_name: string } | null;
-        }
-      >;
+      return (data ?? []) as unknown as DashTask[];
     },
   });
 
@@ -126,7 +141,9 @@ export function AdminDashboardPage() {
   const statusData = (
     ["pending", "in_progress", "submitted", "approved", "rejected"] as TaskStatus[]
   ).map((s) => ({ name: STATUS_LABEL[s], value: tasks.filter((t) => t.status === s).length }));
-  const statusColors = ["#94a3b8", "#3b82f6", "#f59e0b", "#10b981", "#ef4444"];
+  // Aligned with new semantic palette (Design System §1):
+  //   secondary, primary-blue, warning-amber, success-green, destructive-red
+  const statusColors = ["#94a3b8", "#2563eb", "#f59e0b", "#16a34a", "#ef4444"];
 
   const priorityData = ["low", "medium", "high", "urgent"].map((p) => ({
     name: p,
@@ -135,12 +152,10 @@ export function AdminDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Tổng quan</h1>
-        <p className="text-sm text-muted-foreground">
-          Đánh giá hiệu suất nhân viên và tiến độ công việc của toàn bộ hệ thống.
-        </p>
-      </div>
+      <PageHeader
+        title="Tổng quan"
+        description="Đánh giá hiệu suất nhân viên và tiến độ công việc của toàn bộ hệ thống."
+      />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard label="Tổng công việc" value={total} icon={ListTodo} />
@@ -201,7 +216,7 @@ export function AdminDashboardPage() {
                   <XAxis dataKey="name" className="text-xs" />
                   <YAxis allowDecimals={false} className="text-xs" />
                   <Tooltip />
-                  <Bar dataKey="value" fill="oklch(0.488 0.243 264.376)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="value" fill="#2563eb" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -223,7 +238,19 @@ export function AdminDashboardPage() {
               ))}
             </div>
           ) : perf.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Chưa có nhân viên.</p>
+            <EmptyState
+              size="inline"
+              icon={Users}
+              title="Chưa có nhân viên"
+              description="Thêm nhân viên trong trang Quản lý nhân viên để bắt đầu theo dõi hiệu suất."
+              action={
+                <Button asChild variant="outline" size="sm">
+                  <Link to="/employees">
+                    <Plus className="h-4 w-4" /> Quản lý nhân viên
+                  </Link>
+                </Button>
+              }
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -311,7 +338,12 @@ export function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             {(upcomingQ.data ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">Không có công việc sắp đến hạn.</p>
+              <EmptyState
+                size="inline"
+                icon={Clock}
+                title="Không có công việc sắp đến hạn"
+                description="Tất cả công việc đều còn nhiều thời gian."
+              />
             ) : (
               <ul className="space-y-2">
                 {upcomingQ.data?.map((t) => (
@@ -319,8 +351,8 @@ export function AdminDashboardPage() {
                     <Link to={`/tasks/${t.id}`} className="flex items-center justify-between gap-2 rounded-md p-2 hover:bg-accent">
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium">{t.title}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {t.profiles?.full_name ?? "—"} · {formatDate(t.deadline)}
+                        <div className="truncate text-xs text-muted-foreground">
+                          {assigneeNames(t.assignees)} · {formatDate(t.deadline)}
                         </div>
                       </div>
                       <Badge variant="warning">{STATUS_LABEL[t.status]}</Badge>
@@ -339,7 +371,12 @@ export function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             {(overdueQ.data ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">Không có công việc quá hạn.</p>
+              <EmptyState
+                size="inline"
+                icon={CheckCircle2}
+                title="Không có công việc quá hạn"
+                description="Mọi công việc đều đang đúng tiến độ."
+              />
             ) : (
               <ul className="space-y-2">
                 {overdueQ.data?.map((t) => (
@@ -347,8 +384,8 @@ export function AdminDashboardPage() {
                     <Link to={`/tasks/${t.id}`} className="flex items-center justify-between gap-2 rounded-md p-2 hover:bg-accent">
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium">{t.title}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {t.profiles?.full_name ?? "—"} · hết hạn {formatDate(t.deadline)}
+                        <div className="truncate text-xs text-muted-foreground">
+                          {assigneeNames(t.assignees)} · hết hạn {formatDate(t.deadline)}
                         </div>
                       </div>
                       <Badge variant="destructive">Quá hạn</Badge>

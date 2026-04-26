@@ -53,6 +53,7 @@ export function CreateUserDialog({ open, onOpenChange }: Props) {
       });
       qc.invalidateQueries({ queryKey: ["profiles"] });
       qc.invalidateQueries({ queryKey: ["employee-performance"] });
+      qc.invalidateQueries({ queryKey: ["admin-audit-log"] });
       setCreated({ email: email.trim().toLowerCase(), password });
       toast.success("Đã tạo tài khoản");
     } catch (err) {

@@ -7,7 +7,7 @@ export function ProtectedRoute({ children }: { children?: React.ReactNode }) {
   if (loading) return <FullPageSpinner />;
   if (!session) return <Navigate to="/login" replace />;
   if (profile?.must_change_password) return <Navigate to="/change-password" replace />;
-  if (!profile?.is_active) return <Navigate to="/inactive" replace />;
+  if (profile && profile.is_active === false) return <Navigate to="/inactive" replace />;
   return <>{children ?? <Outlet />}</>;
 }
 

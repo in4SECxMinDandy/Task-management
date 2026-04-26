@@ -4,4 +4,9 @@
 project_id = "pybmkjhfwxurrlwxhdxo"
 
 [functions.admin-users]
-verify_jwt = true
+# IMPORTANT: must be FALSE so the API gateway lets the CORS preflight (OPTIONS,
+# no Authorization header) reach the function. The function itself authenticates
+# the caller and enforces admin-only access — see supabase/functions/admin-users/index.ts.
+# If this is `true`, the gateway rejects OPTIONS with 401 and the browser reports
+# a CORS error like "Response to preflight request doesn't pass access control check".
+verify_jwt = false

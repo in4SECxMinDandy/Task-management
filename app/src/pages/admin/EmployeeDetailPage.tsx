@@ -1,13 +1,14 @@
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Mail, Building2 } from "lucide-react";
+import { Inbox, Mail, Building2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import { initials, formatDate, formatDateTime } from "@/lib/utils";
 import { isOverdue, PRIORITY_COLOR, PRIORITY_LABEL, STATUS_COLOR, STATUS_LABEL } from "@/lib/format";
@@ -44,13 +45,15 @@ export function EmployeeDetailPage() {
     queryKey: ["employee-tasks", id],
     enabled: !!id,
     queryFn: async () => {
+      // Use task_assignees so co-assigned tasks also show up here, not just
+      // the ones where this user happens to be the legacy primary.
       const { data, error } = await supabase
         .from("tasks")
-        .select("*")
-        .eq("assigned_to", id!)
+        .select("*, task_assignees!inner(user_id)")
+        .eq("task_assignees.user_id", id!)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as Task[];
+      return (data ?? []) as unknown as Task[];
     },
   });
 
@@ -75,11 +78,13 @@ export function EmployeeDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Button asChild variant="ghost" size="sm">
-        <Link to="/employees">
-          <ArrowLeft className="h-4 w-4" /> Quay lại danh sách
-        </Link>
-      </Button>
+      {/* Breadcrumbs replace the "Quay lại" button (Design System §3). */}
+      <Breadcrumbs
+        items={[
+          { label: "Nhân viên", to: "/employees" },
+          { label: profile.full_name },
+        ]}
+      />
 
       <Card>
         <CardContent className="flex items-center gap-4 p-5">
@@ -181,7 +186,8 @@ function Metric({ label, value, suffix }: { label: string; value: string; suffix
 }
 
 function TaskList({ tasks, emptyText }: { tasks: Task[]; emptyText: string }) {
-  if (tasks.length === 0) return <p className="py-6 text-center text-sm text-muted-foreground">{emptyText}</p>;
+  if (tasks.length === 0)
+    return <EmptyState size="inline" icon={Inbox} title={emptyText} />;
   return (
     <div className="space-y-2">
       {tasks.map((t) => {

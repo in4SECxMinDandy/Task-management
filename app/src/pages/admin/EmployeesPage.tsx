@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { MoreHorizontal, Plus, RefreshCw, Search, ShieldOff, UserCog } from "lucide-react";
+import { MoreHorizontal, Plus, RefreshCw, Search, ShieldOff, UserCog, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -78,6 +81,7 @@ export function EmployeesPage() {
       await adminUpdateUser({ user_id: p.id, is_active: !p.is_active });
       toast.success(p.is_active ? "Đã vô hiệu hóa tài khoản" : "Đã kích hoạt lại tài khoản");
       qc.invalidateQueries({ queryKey: ["profiles"] });
+      qc.invalidateQueries({ queryKey: ["admin-audit-log"] });
     } catch (err) {
       const e = err as { message?: string };
       toast.error(e.message ?? "Có lỗi xảy ra");
@@ -88,22 +92,20 @@ export function EmployeesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Quản lý nhân viên</h1>
-          <p className="text-sm text-muted-foreground">
-            Tạo, chỉnh sửa và quản lý quyền truy cập của nhân viên.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="icon" onClick={() => refetch()} aria-label="Refresh">
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" /> Thêm nhân viên
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Quản lý nhân viên"
+        description="Tạo, chỉnh sửa và quản lý quyền truy cập của nhân viên."
+        actions={
+          <>
+            <Button variant="outline" size="icon" onClick={() => refetch()} aria-label="Refresh">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" /> Thêm nhân viên
+            </Button>
+          </>
+        }
+      />
 
       <Card>
         <CardContent className="space-y-4 p-4">
@@ -130,15 +132,39 @@ export function EmployeesPage() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
-                    Đang tải...
-                  </TableCell>
-                </TableRow>
+                // Skeleton rows preview the table layout instead of a generic
+                // "loading" string (Design System §2 — micro-interactions).
+                Array.from({ length: 4 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell colSpan={6}>
+                      <Skeleton className="h-8 w-full" />
+                    </TableCell>
+                  </TableRow>
+                ))
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
-                    Không có nhân viên.
+                  <TableCell colSpan={6}>
+                    <EmptyState
+                      size="inline"
+                      icon={Users}
+                      title={search ? "Không tìm thấy nhân viên phù hợp" : "Chưa có nhân viên"}
+                      description={
+                        search
+                          ? "Thử với từ khoá khác."
+                          : "Thêm nhân viên để bắt đầu giao việc."
+                      }
+                      action={
+                        search ? (
+                          <Button variant="outline" size="sm" onClick={() => setSearch("")}>
+                            Xoá tìm kiếm
+                          </Button>
+                        ) : (
+                          <Button size="sm" onClick={() => setCreateOpen(true)}>
+                            <Plus className="h-4 w-4" /> Thêm nhân viên
+                          </Button>
+                        )
+                      }
+                    />
                   </TableCell>
                 </TableRow>
               ) : (

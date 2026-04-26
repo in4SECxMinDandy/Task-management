@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Copy, Loader2, RefreshCw } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +22,7 @@ interface Props {
 }
 
 export function ResetPasswordDialog({ profile, onOpenChange }: Props) {
+  const qc = useQueryClient();
   const [password, setPassword] = useState(generatePassword());
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -39,6 +41,7 @@ export function ResetPasswordDialog({ profile, onOpenChange }: Props) {
     setLoading(true);
     try {
       await adminResetPassword(profile.id, password);
+      qc.invalidateQueries({ queryKey: ["admin-audit-log"] });
       setDone(true);
       toast.success("Đã đặt lại mật khẩu");
     } catch (err) {

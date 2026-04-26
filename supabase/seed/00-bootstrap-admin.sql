@@ -19,7 +19,7 @@ select
   true,
   false
 from auth.users u
-where u.email = 'buongluongtm@gmail.com'   -- <-- THAY EMAIL ADMIN CỦA BẠN VÀO ĐÂY
+where u.email = 'bongluongtm@gmail.com'   -- <-- THAY EMAIL ADMIN CỦA BẠN VÀO ĐÂY
 on conflict (id) do update
   set role = excluded.role,
       is_active = true,

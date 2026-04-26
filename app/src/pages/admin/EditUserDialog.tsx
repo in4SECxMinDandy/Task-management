@@ -53,6 +53,7 @@ export function EditUserDialog({ profile, onOpenChange }: Props) {
       });
       qc.invalidateQueries({ queryKey: ["profiles"] });
       qc.invalidateQueries({ queryKey: ["employee-performance"] });
+      qc.invalidateQueries({ queryKey: ["admin-audit-log"] });
       toast.success("Đã cập nhật");
       onOpenChange(false);
     } catch (err) {

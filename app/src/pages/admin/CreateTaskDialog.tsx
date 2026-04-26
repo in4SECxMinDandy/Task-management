@@ -26,6 +26,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { uploadTaskFile } from "@/lib/storage";
 import type { Priority, Profile } from "@/types/database";
 import { formatBytes } from "@/lib/format";
+import { MultiSelectAssignees } from "@/components/MultiSelectAssignees";
 
 interface Props {
   open: boolean;
@@ -37,7 +38,7 @@ export function CreateTaskDialog({ open, onOpenChange }: Props) {
   const qc = useQueryClient();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [assignedTo, setAssignedTo] = useState("");
+  const [assignees, setAssignees] = useState<string[]>([]);
   const [deadline, setDeadline] = useState("");
   const [priority, setPriority] = useState<Priority>("medium");
   const [files, setFiles] = useState<File[]>([]);
@@ -59,7 +60,7 @@ export function CreateTaskDialog({ open, onOpenChange }: Props) {
   const reset = () => {
     setTitle("");
     setDescription("");
-    setAssignedTo("");
+    setAssignees([]);
     setDeadline("");
     setPriority("medium");
     setFiles([]);
@@ -68,15 +69,24 @@ export function CreateTaskDialog({ open, onOpenChange }: Props) {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
+    if (assignees.length === 0) {
+      toast.error("Vui lòng chọn ít nhất một nhân viên để giao việc");
+      return;
+    }
     setLoading(true);
     try {
+      // Keep `assigned_to` populated with the first chosen user as a "primary"
+      // assignee for backward compatibility (legacy queries / triggers /
+      // employee_performance still read it). The full set of people allowed
+      // to work on the task lives in the `task_assignees` join table.
+      const [primary, ...rest] = assignees;
       const { data: task, error } = await supabase
         .from("tasks")
         .insert({
           title: title.trim(),
           description: description.trim() || null,
           created_by: profile.id,
-          assigned_to: assignedTo,
+          assigned_to: primary,
           deadline: deadline ? new Date(deadline).toISOString() : null,
           priority,
         })
@@ -84,9 +94,20 @@ export function CreateTaskDialog({ open, onOpenChange }: Props) {
         .single();
       if (error) throw error;
 
+      // task_assignees: primary is auto-inserted by the legacy assigned_to
+      // backfill? No — only the migration backfilled existing rows. New rows
+      // need to be inserted explicitly.
+      const assigneeRows = [primary, ...rest].map((uid) => ({
+        task_id: task!.id,
+        user_id: uid,
+        assigned_by: profile.id,
+      }));
+      const { error: aErr } = await supabase.from("task_assignees").insert(assigneeRows);
+      if (aErr) throw aErr;
+
       for (const f of files) {
         const path = await uploadTaskFile(task!.id, f, "assignment");
-        const { error: aErr } = await supabase.from("task_attachments").insert({
+        const { error: attErr } = await supabase.from("task_attachments").insert({
           task_id: task!.id,
           kind: "assignment",
           storage_path: path,
@@ -95,7 +116,7 @@ export function CreateTaskDialog({ open, onOpenChange }: Props) {
           mime_type: f.type || null,
           uploaded_by: profile.id,
         });
-        if (aErr) throw aErr;
+        if (attErr) throw attErr;
       }
 
       toast.success("Đã tạo công việc và gửi thông báo");
@@ -140,22 +161,20 @@ export function CreateTaskDialog({ open, onOpenChange }: Props) {
               placeholder="Mô tả chi tiết công việc, yêu cầu, output mong đợi..."
             />
           </div>
+          <div className="grid gap-2">
+            <Label>Giao cho ({assignees.length} người)</Label>
+            <MultiSelectAssignees
+              options={employeesQ.data ?? []}
+              value={assignees}
+              onChange={setAssignees}
+              placeholder="Chọn một hoặc nhiều nhân viên"
+            />
+            <p className="text-xs text-muted-foreground">
+              Có thể chọn nhiều người cùng làm chung một task. Mọi người được chọn đều có
+              thể cập nhật tiến độ, nộp file và bình luận.
+            </p>
+          </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label>Giao cho</Label>
-              <Select value={assignedTo} onValueChange={setAssignedTo}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn nhân viên" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(employeesQ.data ?? []).map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.full_name} {p.role === "admin" ? "(admin)" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
             <div className="grid gap-2">
               <Label>Mức ưu tiên</Label>
               <Select value={priority} onValueChange={(v) => setPriority(v as Priority)}>
@@ -219,7 +238,7 @@ export function CreateTaskDialog({ open, onOpenChange }: Props) {
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Hủy
             </Button>
-            <Button type="submit" disabled={loading || !assignedTo}>
+            <Button type="submit" disabled={loading || assignees.length === 0}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Tạo công việc"}
             </Button>
           </DialogFooter>

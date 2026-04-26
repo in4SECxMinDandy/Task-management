@@ -29,7 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .maybeSingle();
     if (error) {
       // eslint-disable-next-line no-console
-      console.error("loadProfile error", error);
+      console.error(`loadProfile error for user ${userId}:`, error.message, error);
       setProfile(null);
       return;
     }
@@ -44,13 +44,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.session?.user) {
         await loadProfile(data.session.user.id);
       }
-      setLoading(false);
+      if (mounted) setLoading(false);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    // IMPORTANT: do NOT await Supabase calls inside onAuthStateChange — the
+    // auth client holds an internal lock for the duration of the callback,
+    // and any supabase.from(...)/auth.* call from inside will need that same
+    // lock to read/refresh the access token, causing a deadlock that makes
+    // the UI hang on login. Defer the work to the next tick instead.
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       if (newSession?.user) {
-        await loadProfile(newSession.user.id);
+        const userId = newSession.user.id;
+        setTimeout(() => {
+          if (mounted) void loadProfile(userId);
+        }, 0);
       } else {
         setProfile(null);
       }
@@ -70,11 +78,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin: profile?.role === "admin",
       role: profile?.role ?? null,
       async signIn(email, password) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          // eslint-disable-next-line no-console
+          console.error(
+            `Supabase signIn error: ${error.message} (status: ${(error as any).status ?? "unknown"})`
+          );
+          // eslint-disable-next-line no-console
+          console.error("Full error details:", { message: error.message, status: (error as any).status, code: (error as any).code, email });
+          throw error;
+        }
+        if (data.user) {
+          await loadProfile(data.user.id);
+        }
+        // eslint-disable-next-line no-console
+        console.log("Supabase signIn success:", { user: data.user?.email, session: !!data.session, profileLoaded: !!profile });
       },
       async signOut() {
-        await supabase.auth.signOut();
+        const { error } = await supabase.auth.signOut();
+        if (error) console.error("signOut error", error);
         setProfile(null);
       },
       async refreshProfile() {

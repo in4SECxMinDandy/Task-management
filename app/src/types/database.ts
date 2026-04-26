@@ -72,6 +72,13 @@ export interface TaskComment {
   created_at: string;
 }
 
+export interface TaskAssignee {
+  task_id: string;
+  user_id: string;
+  assigned_at: string;
+  assigned_by: string | null;
+}
+
 export interface TaskHistory {
   id: string;
   task_id: string;
@@ -157,6 +164,11 @@ export interface Database {
           content: string;
         };
         Update: Partial<TaskComment>;
+      };
+      task_assignees: {
+        Row: TaskAssignee;
+        Insert: Partial<TaskAssignee> & { task_id: string; user_id: string };
+        Update: Partial<TaskAssignee>;
       };
       task_history: {
         Row: TaskHistory;

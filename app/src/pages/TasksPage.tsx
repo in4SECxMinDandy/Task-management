@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Search } from "lucide-react";
+import { ListTodo, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -15,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { initials, formatDateTime } from "@/lib/utils";
@@ -34,17 +37,25 @@ export function TasksPage() {
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
   const [createOpen, setCreateOpen] = useState(false);
 
-  const { data = [], isLoading } = useQuery({
+  type TaskRow = Task & {
+    assignees: Array<{ user_id: string; user: { full_name: string; email: string } | null }>;
+  };
+
+  const { data = [], isLoading } = useQuery<TaskRow[]>({
     queryKey: ["tasks", isAdmin, statusFilter],
     queryFn: async () => {
+      // RLS already restricts non-admin users to tasks where they are an
+      // assignee or the creator, so we don't need an explicit filter here.
       let q = supabase
         .from("tasks")
-        .select("*, assignee:profiles!tasks_assigned_to_fkey(full_name, email)")
+        .select(
+          "*, assignees:task_assignees(user_id, user:profiles!task_assignees_user_id_fkey(full_name, email))",
+        )
         .order("created_at", { ascending: false });
       if (statusFilter !== "all") q = q.eq("status", statusFilter);
       const { data, error } = await q;
       if (error) throw error;
-      return data as Array<Task & { assignee: { full_name: string; email: string } | null }>;
+      return (data ?? []) as unknown as TaskRow[];
     },
   });
 
@@ -54,28 +65,30 @@ export function TasksPage() {
     return (
       t.title.toLowerCase().includes(q) ||
       (t.description ?? "").toLowerCase().includes(q) ||
-      (t.assignee?.full_name ?? "").toLowerCase().includes(q)
+      t.assignees.some((a) => (a.user?.full_name ?? "").toLowerCase().includes(q))
     );
   });
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Công việc</h1>
-          <p className="text-sm text-muted-foreground">
-            {isAdmin
-              ? "Tất cả công việc trong hệ thống."
-              : "Danh sách công việc bạn được giao."}
-          </p>
-        </div>
-        {isAdmin && (
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" /> Tạo công việc
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title="Công việc"
+        description={
+          isAdmin
+            ? "Tất cả công việc trong hệ thống."
+            : "Danh sách công việc bạn được giao."
+        }
+        actions={
+          isAdmin && (
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" /> Tạo công việc
+            </Button>
+          )
+        }
+      />
 
+      {/* Filters / search row — placed directly under the title per the
+          F-pattern: users scan title → primary action → filters. */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-64 flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -102,11 +115,60 @@ export function TasksPage() {
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Đang tải...</p>
+        // Skeleton loading instead of generic spinner — gives the user a
+        // preview of where content will appear (Design System §2).
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="space-y-3 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-5 w-16" />
+                </div>
+                <Skeleton className="h-3 w-full" />
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-6 w-24" />
+                  <Skeleton className="h-2 w-24" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       ) : filtered.length === 0 ? (
         <Card>
-          <CardContent className="p-8 text-center text-sm text-muted-foreground">
-            Không có công việc nào.
+          <CardContent className="p-0">
+            <EmptyState
+              icon={ListTodo}
+              title={
+                search || statusFilter !== "all"
+                  ? "Không tìm thấy công việc phù hợp"
+                  : "Chưa có công việc nào"
+              }
+              description={
+                search || statusFilter !== "all"
+                  ? "Thử bỏ bộ lọc hoặc tìm kiếm với từ khoá khác."
+                  : isAdmin
+                  ? "Bắt đầu bằng cách tạo công việc đầu tiên cho nhân viên."
+                  : "Khi quản trị viên giao việc, công việc sẽ hiển thị ở đây."
+              }
+              action={
+                isAdmin && !search && statusFilter === "all" ? (
+                  <Button onClick={() => setCreateOpen(true)}>
+                    <Plus className="h-4 w-4" /> Tạo công việc
+                  </Button>
+                ) : (search || statusFilter !== "all") ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearch("");
+                      setStatusFilter("all");
+                    }}
+                  >
+                    Xoá bộ lọc
+                  </Button>
+                ) : undefined
+              }
+            />
           </CardContent>
         </Card>
       ) : (
@@ -115,7 +177,7 @@ export function TasksPage() {
             const overdue = isOverdue(t.deadline, t.status);
             return (
               <Link key={t.id} to={`/tasks/${t.id}`}>
-                <Card className="transition-colors hover:bg-accent/40">
+                <Card className="cursor-pointer transition-colors hover:bg-accent/40 active:bg-accent/60">
                   <CardContent className="space-y-2 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -136,14 +198,7 @@ export function TasksPage() {
                       {t.deadline && <span>Hạn: {formatDateTime(t.deadline)}</span>}
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <Avatar className="h-6 w-6">
-                          <AvatarFallback className="text-[10px]">
-                            {initials(t.assignee?.full_name)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="text-xs">{t.assignee?.full_name ?? "—"}</span>
-                      </div>
+                      <AssigneesSummary assignees={t.assignees} />
                       <div className="flex items-center gap-2">
                         <Progress className="w-24" value={t.progress} />
                         <span className="text-xs text-muted-foreground">{t.progress}%</span>
@@ -158,6 +213,46 @@ export function TasksPage() {
       )}
 
       {isAdmin && <CreateTaskDialog open={createOpen} onOpenChange={setCreateOpen} />}
+    </div>
+  );
+}
+
+function AssigneesSummary({
+  assignees,
+}: {
+  assignees: Array<{ user_id: string; user: { full_name: string; email: string } | null }>;
+}) {
+  if (assignees.length === 0) {
+    return <span className="text-xs text-muted-foreground">— chưa có người làm</span>;
+  }
+  const max = 3;
+  const visible = assignees.slice(0, max);
+  const extra = assignees.length - visible.length;
+  const names = assignees.map((a) => a.user?.full_name ?? "?").join(", ");
+  return (
+    <div className="flex min-w-0 items-center gap-2" title={names}>
+      <div className="flex -space-x-2">
+        {visible.map((a) => (
+          <Avatar
+            key={a.user_id}
+            className="h-6 w-6 border-2 border-background"
+          >
+            <AvatarFallback className="text-[10px]">
+              {initials(a.user?.full_name)}
+            </AvatarFallback>
+          </Avatar>
+        ))}
+        {extra > 0 && (
+          <span className="z-10 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-background bg-muted px-1 text-[10px] text-muted-foreground">
+            +{extra}
+          </span>
+        )}
+      </div>
+      <span className="truncate text-xs">
+        {assignees.length === 1
+          ? assignees[0].user?.full_name ?? "—"
+          : `${assignees.length} người`}
+      </span>
     </div>
   );
 }

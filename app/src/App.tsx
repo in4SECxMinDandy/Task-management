@@ -16,7 +16,25 @@ import { SettingsPage } from "@/pages/SettingsPage";
 import { NotificationsPage } from "@/pages/NotificationsPage";
 
 function HomeRedirect() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, profile, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="flex h-full w-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+      </div>
+    );
+  }
+  if (!profile) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center space-y-2">
+          <h2 className="text-lg font-semibold">Không tìm thấy thông tin tài khoản</h2>
+          <p className="text-sm text-muted-foreground">Tài khoản chưa có hồ sơ trong hệ thống.</p>
+          <p className="text-sm text-muted-foreground">Vui lòng chạy seed SQL trong Supabase Dashboard.</p>
+        </div>
+      </div>
+    );
+  }
   return isAdmin ? <AdminDashboardPage /> : <EmployeeDashboardPage />;
 }
 

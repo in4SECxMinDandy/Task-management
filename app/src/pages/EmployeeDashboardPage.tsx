@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -30,13 +32,16 @@ export function EmployeeDashboardPage() {
     queryKey: ["my-tasks", profile?.id],
     enabled: !!profile?.id,
     queryFn: async () => {
+      // Inner-join through task_assignees so we get every task this user is
+      // working on, including ones where they're a secondary assignee
+      // (legacy `assigned_to` only stores the first one).
       const { data, error } = await supabase
         .from("tasks")
-        .select("*")
-        .eq("assigned_to", profile!.id)
+        .select("*, task_assignees!inner(user_id)")
+        .eq("task_assignees.user_id", profile!.id)
         .order("deadline", { ascending: true, nullsFirst: false });
       if (error) throw error;
-      return data as Task[];
+      return (data ?? []) as unknown as Task[];
     },
   });
 
@@ -48,12 +53,10 @@ export function EmployeeDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Xin chào, {profile?.full_name?.split(" ").slice(-1)[0]} 👋
-        </h1>
-        <p className="text-sm text-muted-foreground">Tổng quan công việc của bạn.</p>
-      </div>
+      <PageHeader
+        title={`Xin chào, ${profile?.full_name?.split(" ").slice(-1)[0] ?? ""} 👋`}
+        description="Tổng quan công việc của bạn."
+      />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         <StatCard label="Mới giao" value={pending.length} icon={ListTodo} />
@@ -74,9 +77,12 @@ export function EmployeeDashboardPage() {
         </CardHeader>
         <CardContent>
           {[...overdue, ...pending, ...inProgress].length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              Tuyệt vời! Bạn không có việc tồn đọng.
-            </p>
+            <EmptyState
+              size="inline"
+              icon={CheckCircle2}
+              title="Tuyệt vời! Bạn không có việc tồn đọng."
+              description="Tất cả công việc đã hoàn thành hoặc đang trong tầm kiểm soát."
+            />
           ) : (
             <ul className="space-y-2">
               {[...overdue, ...pending, ...inProgress].slice(0, 8).map((t) => {

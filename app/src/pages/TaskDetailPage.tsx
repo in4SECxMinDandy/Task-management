@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft,
   CheckCircle2,
   Download,
   Loader2,
@@ -15,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -46,7 +46,6 @@ type CommentWithUser = TaskComment & { user: Pick<Profile, "id" | "full_name"> |
 
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const qc = useQueryClient();
   const { profile } = useAuth();
 
@@ -63,14 +62,17 @@ export function TaskDetailPage() {
       const { data, error } = await supabase
         .from("tasks")
         .select(
-          "*, assignee:profiles!tasks_assigned_to_fkey(id, full_name, email), creator:profiles!tasks_created_by_fkey(id, full_name)",
+          "*, creator:profiles!tasks_created_by_fkey(id, full_name), assignees:task_assignees(user_id, user:profiles!task_assignees_user_id_fkey(id, full_name, email))",
         )
         .eq("id", id!)
         .single();
       if (error) throw error;
-      return data as Task & {
-        assignee: Pick<Profile, "id" | "full_name" | "email"> | null;
+      return data as unknown as Task & {
         creator: Pick<Profile, "id" | "full_name"> | null;
+        assignees: Array<{
+          user_id: string;
+          user: Pick<Profile, "id" | "full_name" | "email"> | null;
+        }>;
       };
     },
   });
@@ -146,7 +148,10 @@ export function TaskDetailPage() {
 
   const task = taskQ.data;
   const isAdmin = profile?.role === "admin";
-  const isAssignee = profile?.id === task.assigned_to;
+  const isAssignee =
+    !!profile?.id &&
+    (profile.id === task.assigned_to ||
+      task.assignees.some((a) => a.user_id === profile.id));
   const overdue = isOverdue(task.deadline, task.status);
   const attachments = attachmentsQ.data ?? [];
   const assignmentFiles = attachments.filter((a) => a.kind === "assignment");
@@ -269,9 +274,14 @@ export function TaskDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-        <ArrowLeft className="h-4 w-4" /> Quay lại
-      </Button>
+      {/* Breadcrumbs (Design System §3) — replace the ad-hoc "Quay lại"
+          button so users always know where they are in the hierarchy. */}
+      <Breadcrumbs
+        items={[
+          { label: "Công việc", to: "/tasks" },
+          { label: task.title },
+        ]}
+      />
 
       <Card>
         <CardContent className="space-y-3 p-5">
@@ -307,13 +317,31 @@ export function TaskDetailPage() {
               </Link>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">Người thực hiện</div>
-              <Link to={`/employees/${task.assignee?.id ?? ""}`} className="flex items-center gap-2">
-                <Avatar className="h-7 w-7">
-                  <AvatarFallback>{initials(task.assignee?.full_name)}</AvatarFallback>
-                </Avatar>
-                <span>{task.assignee?.full_name ?? "—"}</span>
-              </Link>
+              <div className="text-xs text-muted-foreground">
+                Người thực hiện ({task.assignees.length})
+              </div>
+              {task.assignees.length === 0 ? (
+                <span className="text-sm text-muted-foreground">— chưa có ai</span>
+              ) : (
+                <ul className="space-y-1">
+                  {task.assignees.map((a) => (
+                    <li key={a.user_id}>
+                      <Link
+                        to={`/employees/${a.user_id}`}
+                        className="flex items-center gap-2 hover:underline"
+                      >
+                        <Avatar className="h-7 w-7">
+                          <AvatarFallback>{initials(a.user?.full_name)}</AvatarFallback>
+                        </Avatar>
+                        <span className="truncate">{a.user?.full_name ?? "—"}</span>
+                        {profile?.id === a.user_id && (
+                          <span className="text-xs text-muted-foreground">(bạn)</span>
+                        )}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
 

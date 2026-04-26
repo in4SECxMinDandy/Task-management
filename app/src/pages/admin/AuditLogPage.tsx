@@ -1,8 +1,11 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search } from "lucide-react";
+import { ScrollText, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Table,
   TableBody,
@@ -52,6 +55,8 @@ export function AuditLogPage() {
       if (error) throw error;
       return data as unknown as EntryWithRefs[];
     },
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const filtered = useMemo(() => {
@@ -70,13 +75,10 @@ export function AuditLogPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Nhật ký quản trị</h1>
-        <p className="text-sm text-muted-foreground">
-          Lịch sử các hành động nhạy cảm trên tài khoản (tạo, sửa, đặt lại mật khẩu, vô
-          hiệu hoá). Hiển thị tối đa 500 mục gần nhất.
-        </p>
-      </div>
+      <PageHeader
+        title="Nhật ký quản trị"
+        description="Lịch sử các hành động nhạy cảm trên tài khoản (tạo, sửa, đặt lại mật khẩu, vô hiệu hoá). Hiển thị tối đa 500 mục gần nhất."
+      />
 
       <Card>
         <CardContent className="space-y-4 p-4">
@@ -111,8 +113,24 @@ export function AuditLogPage() {
                 ))
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                    Không có mục nào.
+                  <TableCell colSpan={5}>
+                    <EmptyState
+                      size="inline"
+                      icon={ScrollText}
+                      title={search ? "Không tìm thấy mục nào" : "Chưa có hoạt động nào được ghi"}
+                      description={
+                        search
+                          ? "Thử với từ khoá khác."
+                          : "Các thao tác quản trị sẽ được tự động ghi vào đây."
+                      }
+                      action={
+                        search ? (
+                          <Button variant="outline" size="sm" onClick={() => setSearch("")}>
+                            Xoá tìm kiếm
+                          </Button>
+                        ) : undefined
+                      }
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
