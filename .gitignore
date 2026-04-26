@@ -1,0 +1,24 @@
+node_modules/
+.DS_Store
+
+# Build artifacts
+**/dist/
+**/dist-ssr/
+**/target/
+
+# Env (contain secrets — only commit .env.example)
+.env
+.env.local
+.env.*.local
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Tauri generated
+**/src-tauri/gen/schemas/
+
+# Supabase generated
+.supabase/
+supabase/.temp/

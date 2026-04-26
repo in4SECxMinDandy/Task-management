@@ -1,0 +1,7 @@
+# Supabase project config — only used when running the Supabase CLI locally.
+# Production deployments are managed from the dashboard.
+
+project_id = "pybmkjhfwxurrlwxhdxo"
+
+[functions.admin-users]
+verify_jwt = true
