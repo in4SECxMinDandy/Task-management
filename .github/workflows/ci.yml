@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "devin/**"]
+  pull_request:
+
+jobs:
+  typecheck-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Write placeholder .env (just to satisfy import.meta.env)
+        run: |
+          echo "VITE_SUPABASE_URL=https://placeholder.supabase.co" > .env
+          echo "VITE_SUPABASE_ANON_KEY=placeholder" >> .env
+
+      - run: pnpm tsc --noEmit
+      - run: pnpm build
