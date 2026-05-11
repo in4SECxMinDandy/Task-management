@@ -9,7 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 
 export function ChangePasswordPage({ forced = false }: { forced?: boolean }) {
-  const { session, profile, refreshProfile, signOut } = useAuth();
+  const { profile, refreshProfile, signOut } = useAuth();
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -27,14 +27,18 @@ export function ChangePasswordPage({ forced = false }: { forced?: boolean }) {
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
-      if (session?.user.id) {
-        const { error: pErr } = await supabase
-          .from("profiles")
-          .update({ must_change_password: false })
-          .eq("id", session.user.id);
-        if (pErr) throw pErr;
+      // Use RPC (security definer) to clear the flag — a direct .update() on
+      // profiles is blocked by the profiles_block_privileged_self_update trigger
+      // for non-admin users.
+      const { error: rpcErr } = await supabase.rpc("clear_must_change_password");
+      if (rpcErr) throw rpcErr;
+      // Refresh profile using the confirmed current user to avoid using a
+      // potentially stale session reference after the token rotation that
+      // auth.updateUser() triggers.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await refreshProfile();
       }
-      await refreshProfile();
       navigate("/", { replace: true });
     } catch (err) {
       const e = err as { message?: string };
