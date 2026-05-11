@@ -140,8 +140,12 @@ serve(async (req) => {
         if (error) {
           return jsonResponse({ error: "create_user_failed", detail: error.message }, { status: 400 });
         }
+        const createdUserId = created.user?.id;
+        if (!createdUserId) {
+          return jsonResponse({ error: "create_user_failed", detail: "Missing created user id" }, { status: 500 });
+        }
         const { error: insErr } = await admin.from("profiles").upsert({
-          id: created.user!.id,
+          id: createdUserId,
           email,
           full_name,
           role,
@@ -150,10 +154,11 @@ serve(async (req) => {
           must_change_password: true,
         });
         if (insErr) {
+          await admin.auth.admin.deleteUser(createdUserId);
           return jsonResponse({ error: "create_profile_failed", detail: insErr.message }, { status: 500 });
         }
-        await recordAudit(admin, callerId, "create_user", created.user!.id, body);
-        return jsonResponse({ user_id: created.user!.id });
+        await recordAudit(admin, callerId, "create_user", createdUserId, body);
+        return jsonResponse({ user_id: createdUserId });
       }
 
       case "update": {

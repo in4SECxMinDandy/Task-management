@@ -20,6 +20,12 @@ export async function getSignedUrl(path: string, expiresIn = 3600) {
   return data.signedUrl;
 }
 
+export async function removeTaskFiles(paths: string[]): Promise<void> {
+  if (paths.length === 0) return;
+  const { error } = await supabase.storage.from(TASK_BUCKET).remove(paths);
+  if (error) throw error;
+}
+
 /**
  * `true` when running inside the Tauri desktop webview.
  *
@@ -43,11 +49,11 @@ function isTauri(): boolean {
  * happened. Instead we now fetch the bytes through the Supabase JS client
  * (which already has the user's session and goes through RLS), then:
  *
- * - In Tauri: ask the OS for a save location via plugin-dialog and write
- *   the bytes with plugin-fs.
+ * - In Tauri: ask the OS for a save location via plugin-dialog and pass the
+ *   bytes to the custom `save_bytes` command.
  * - In a plain browser: trigger an `<a download>` click on a blob URL.
  *
- * This works without any extra capability, and gives the user a real
+ * This avoids broad fs/opener capabilities, and gives the user a real
  * "Save as" dialog instead of bouncing through a browser tab.
  */
 export async function downloadTaskFile(

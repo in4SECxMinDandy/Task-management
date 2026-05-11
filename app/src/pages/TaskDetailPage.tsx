@@ -33,7 +33,7 @@ import {
   formatBytes,
 } from "@/lib/format";
 import { formatDateTime, initials, formatRelative } from "@/lib/utils";
-import { downloadTaskFile, uploadTaskFile } from "@/lib/storage";
+import { downloadTaskFile, removeTaskFiles, uploadTaskFile } from "@/lib/storage";
 import type {
   Profile,
   Task,
@@ -198,8 +198,10 @@ export function TaskDetailPage() {
   const onUploadSubmission = async (file: File) => {
     if (!profile) return;
     setBusy(true);
+    let uploadedPath: string | null = null;
     try {
       const path = await uploadTaskFile(task.id, file, "submission");
+      uploadedPath = path;
       const { error } = await supabase.from("task_attachments").insert({
         task_id: task.id,
         kind: "submission",
@@ -213,6 +215,13 @@ export function TaskDetailPage() {
       toast.success("Đã tải lên file nộp");
       qc.invalidateQueries({ queryKey: ["task-attachments", id] });
     } catch (err) {
+      if (uploadedPath) {
+        try {
+          await removeTaskFiles([uploadedPath]);
+        } catch (cleanupErr) {
+          console.warn("Failed to cleanup uploaded submission after metadata error", cleanupErr);
+        }
+      }
       const e = err as { message?: string };
       toast.error(e.message ?? "Tải lên thất bại");
     } finally {

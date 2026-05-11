@@ -5,11 +5,8 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "opener:default",
     "notification:default",
     "dialog:default",
-    "fs:default",
-    "shell:allow-open",
     "allow-save-bytes"
   ]
 }

@@ -90,13 +90,19 @@ Dự án áp dụng các công nghệ hiện đại nhất để đảm bảo hi
 ### Bước 1: Khởi tạo Database trên Supabase
 1. Đăng nhập vào [Supabase Dashboard](https://supabase.com/dashboard) và chọn Project của bạn.
 2. Mở mục **SQL Editor**.
-3. Mở các file trong thư mục `supabase/migrations/` và chạy lần lượt theo thứ tự:
+3. Mở toàn bộ file trong thư mục `supabase/migrations/` và chạy lần lượt theo thứ tự tên file:
    - `1. 20250101000000_init_schema.sql` (Tạo bảng & Enum)
    - `2. 20250101000100_helpers.sql` (Hàm tiện ích `is_admin()`)
    - `3. 20250101000200_rls.sql` (Bật Row Level Security)
    - `4. 20250101000300_triggers.sql` (Triggers cho hệ thống thông báo và Audit log)
    - `5. 20250101000400_views.sql` (View thống kê hiệu suất `employee_performance`)
    - `6. 20250101000500_storage.sql` (Tạo bucket `task-files` và cấu hình bảo mật file)
+   - `7. 20250101000600_fix_view_security.sql` (Đảm bảo view chạy theo quyền người gọi)
+   - `8. 20250101000700_security_hardening.sql` (Chặn leo quyền và tự duyệt task)
+   - `9. 20250101000800_audit_log.sql` (Nhật ký thao tác quản trị)
+   - `10. 20250101000900_multi_assignee.sql` (Hỗ trợ giao nhiều người)
+   - `11. 20250101001000_fix_change_password_rpc.sql` (RPC đổi mật khẩu lần đầu)
+   - `12. 20250101001100_active_user_rls.sql` (Chặn tài khoản vô hiệu truy cập dữ liệu nghiệp vụ)
 
 ### Bước 2: Cấu hình Authentication (Tắt tự do đăng ký)
 Hệ thống này chỉ cho phép Admin tạo tài khoản.

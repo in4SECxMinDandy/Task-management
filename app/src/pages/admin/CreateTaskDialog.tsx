@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
-import { uploadTaskFile } from "@/lib/storage";
+import { removeTaskFiles, uploadTaskFile } from "@/lib/storage";
 import type { Priority, Profile } from "@/types/database";
 import { formatBytes } from "@/lib/format";
 import { MultiSelectAssignees } from "@/components/MultiSelectAssignees";
@@ -74,6 +74,8 @@ export function CreateTaskDialog({ open, onOpenChange }: Props) {
       return;
     }
     setLoading(true);
+    let createdTaskId: string | null = null;
+    const uploadedPaths: string[] = [];
     try {
       // Keep `assigned_to` populated with the first chosen user as a "primary"
       // assignee for backward compatibility (legacy queries / triggers /
@@ -93,6 +95,7 @@ export function CreateTaskDialog({ open, onOpenChange }: Props) {
         .select("id")
         .single();
       if (error) throw error;
+      createdTaskId = task!.id;
 
       // task_assignees: primary is auto-inserted by the legacy assigned_to
       // backfill? No — only the migration backfilled existing rows. New rows
@@ -107,6 +110,7 @@ export function CreateTaskDialog({ open, onOpenChange }: Props) {
 
       for (const f of files) {
         const path = await uploadTaskFile(task!.id, f, "assignment");
+        uploadedPaths.push(path);
         const { error: attErr } = await supabase.from("task_attachments").insert({
           task_id: task!.id,
           kind: "assignment",
@@ -126,6 +130,20 @@ export function CreateTaskDialog({ open, onOpenChange }: Props) {
       onOpenChange(false);
       reset();
     } catch (err) {
+      if (uploadedPaths.length > 0) {
+        try {
+          await removeTaskFiles(uploadedPaths);
+        } catch (cleanupErr) {
+          console.warn("Failed to cleanup uploaded files after task creation error", cleanupErr);
+        }
+      }
+      if (createdTaskId) {
+        try {
+          await supabase.from("tasks").delete().eq("id", createdTaskId);
+        } catch (cleanupErr) {
+          console.warn("Failed to cleanup task after task creation error", cleanupErr);
+        }
+      }
       const e = err as { message?: string };
       toast.error(e.message ?? "Tạo công việc thất bại");
     } finally {
