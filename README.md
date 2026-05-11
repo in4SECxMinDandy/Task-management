@@ -103,6 +103,7 @@ Dự án áp dụng các công nghệ hiện đại nhất để đảm bảo hi
    - `10. 20250101000900_multi_assignee.sql` (Hỗ trợ giao nhiều người)
    - `11. 20250101001000_fix_change_password_rpc.sql` (RPC đổi mật khẩu lần đầu)
    - `12. 20250101001100_active_user_rls.sql` (Chặn tài khoản vô hiệu truy cập dữ liệu nghiệp vụ)
+   - `13. 20250101001200_function_lint_hardening.sql` (Giảm cảnh báo Supabase linter cho SQL functions)
 
 ### Bước 2: Cấu hình Authentication (Tắt tự do đăng ký)
 Hệ thống này chỉ cho phép Admin tạo tài khoản.
