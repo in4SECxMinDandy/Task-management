@@ -170,6 +170,100 @@ pnpm tauri build
 
 ---
 
+## 🔄 Tự động cập nhật (OTA Update)
+
+Hệ thống sử dụng [Tauri Updater Plugin](https://v2.tauri.app/plugin/updater/) để mỗi khi bạn (Admin) đẩy phiên bản mới lên GitHub Releases, người dùng chỉ cần vào **Cài đặt → Phiên bản & cập nhật → Kiểm tra cập nhật** là ứng dụng tự tải, tự cài và tự khởi động lại.
+
+### Cách hoạt động
+
+1. App đọc file `latest.json` trên GitHub Releases (`releases/latest/download/latest.json`).
+2. So sánh `version` trong file đó với version hiện tại trong `tauri.conf.json`.
+3. Nếu mới hơn, tải `*.nsis.zip` về (đã được ký số), xác minh chữ ký bằng public key gắn trong app, rồi chạy installer ở chế độ `passive`.
+4. App tự `relaunch()` sau khi cài xong.
+
+### Bước 1 — Sinh cặp khóa ký (CHỈ LÀM 1 LẦN)
+
+Trên máy của Admin, chạy:
+
+```powershell
+cd app
+pnpm tauri signer generate -w ./tauri-update.key
+```
+
+Lệnh này tạo ra:
+
+- `tauri-update.key` — **khóa riêng tư**, KHÔNG ĐƯỢC commit, KHÔNG ĐƯỢC chia sẻ.
+- `tauri-update.key.pub` — **khóa công khai** (an toàn để chia sẻ).
+
+CLI sẽ hỏi bạn đặt mật khẩu cho khóa riêng (có thể để trống nếu chỉ cá nhân dùng, nhưng khuyến nghị có).
+
+> File `tauri-update.key*` đã được liệt kê trong `.gitignore` để tránh lỡ commit.
+
+### Bước 2 — Dán public key vào `tauri.conf.json`
+
+Mở `app/tauri-update.key.pub`, copy nguyên dòng base64 (KHÔNG bao gồm dòng `untrusted comment:` ở đầu) rồi dán vào trường `plugins.updater.pubkey` trong `app/src-tauri/tauri.conf.json`, thay thế chuỗi `REPLACE_WITH_TAURI_PUBKEY_FROM_KEYGEN`:
+
+```jsonc
+"plugins": {
+  "updater": {
+    "endpoints": [
+      "https://github.com/<owner>/<repo>/releases/latest/download/latest.json"
+    ],
+    "pubkey": "dW50cnVzdGVkI...DÁN_PUBLIC_KEY_VÀO_ĐÂY",
+    "windows": { "installMode": "passive" }
+  }
+}
+```
+
+> Nếu bạn fork sang user/repo khác, nhớ chỉnh `endpoints` cho khớp.
+
+### Bước 3 — Đăng ký GitHub Secrets
+
+Vào **Settings → Secrets and variables → Actions** của repo, thêm:
+
+| Secret | Giá trị |
+|---|---|
+| `TAURI_SIGNING_PRIVATE_KEY` | Toàn bộ nội dung file `app/tauri-update.key` (mở bằng Notepad, copy hết, kể cả các dòng `untrusted comment:` và base64). |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Mật khẩu bạn đã đặt ở Bước 1 (để trống nếu không đặt). |
+
+(Tuỳ chọn) `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` nếu bạn không muốn dùng giá trị mặc định trong workflow.
+
+### Bước 4 — Phát hành phiên bản mới
+
+Mỗi lần ra phiên bản:
+
+1. Bump version ở **2 chỗ** cho khớp:
+   - `app/package.json` → `"version": "0.1.2"`
+   - `app/src-tauri/tauri.conf.json` → `"version": "0.1.2"`
+2. Commit và tạo tag `v0.1.2`:
+
+   ```powershell
+   git add -A
+   git commit -m "chore: release v0.1.2"
+   git tag v0.1.2
+   git push origin main --tags
+   ```
+
+3. GitHub Actions (`.github/workflows/release.yml`) sẽ tự động:
+   - Build app trên Windows
+   - Ký bundle `.nsis.zip` bằng `TAURI_SIGNING_PRIVATE_KEY`
+   - Tạo GitHub Release `v0.1.2`
+   - Đính kèm `.exe`, `.nsis.zip`, `.nsis.zip.sig` và sinh `latest.json`
+
+4. Người dùng đang chạy phiên bản cũ sẽ thấy bản mới khi bấm **Cài đặt → Kiểm tra cập nhật**.
+
+### Bước 5 — Trigger thủ công (nếu không muốn tag)
+
+Vào tab **Actions → Release Windows .exe → Run workflow**, nhập tag (vd: `v0.1.2`) — workflow sẽ tạo release với tag đó. Nếu để trống, workflow chỉ build artifact mà không phát hành.
+
+### Lưu ý
+
+- Public key nhúng trong app KHÔNG ĐƯỢC ĐỔI sau khi đã có người dùng cài. Nếu đổi, các bản cài cũ sẽ không thể xác minh bản update mới. Hãy backup `tauri-update.key` ở nơi an toàn.
+- Bản đầu tiên (ví dụ `v0.1.1`) phải được người dùng cài thủ công bằng `.exe`. OTA chỉ áp dụng từ bản kế tiếp trở đi.
+- Nếu thấy lỗi `signature error`/`invalid signature`: thường là pubkey trong `tauri.conf.json` không khớp với private key đã ký bundle.
+
+---
+
 ## 🛡 Kiến trúc Bảo mật
 
 - **Service Role Key**: Chỉ tồn tại trong môi trường an toàn của Edge Function. Tuyệt đối không được đính kèm vào ứng dụng Desktop hay Frontend.

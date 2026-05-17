@@ -7,6 +7,8 @@
     "core:default",
     "notification:default",
     "dialog:default",
+    "updater:default",
+    "process:default",
     "allow-save-bytes"
   ]
 }

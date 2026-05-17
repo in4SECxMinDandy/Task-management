@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { KeyRound, Moon, Sun } from "lucide-react";
+import { KeyRound, Moon, RefreshCw, Sun } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
+import { UpdateButton } from "@/components/UpdateButton";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { supabase } from "@/lib/supabase";
@@ -44,6 +45,17 @@ export function SettingsPage() {
         description="Quản lý tài khoản, giao diện và bảo mật của bạn."
       />
 
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <RefreshCw className="h-4 w-4" /> Phiên bản & cập nhật
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <UpdateButton />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

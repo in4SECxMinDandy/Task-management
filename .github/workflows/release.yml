@@ -15,9 +15,6 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
-    defaults:
-      run:
-        working-directory: app
     steps:
       - uses: actions/checkout@v4
 
@@ -40,9 +37,11 @@ jobs:
           cache-dependency-path: app/pnpm-lock.yaml
 
       - name: Install dependencies
+        working-directory: app
         run: pnpm install --frozen-lockfile
 
       - name: Write .env (anon key is public, safe to embed)
+        working-directory: app
         shell: bash
         run: |
           {
@@ -53,20 +52,50 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
-      - name: Build Tauri (Windows .exe + .msi)
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        run: |
+          if [ -n "${{ github.ref_name }}" ] && [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "value=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ inputs.tag }}" ]; then
+            echo "value=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Builds the app, signs the updater bundle (.nsis.zip + .sig) using the
+      # private key stored in GitHub Secrets, attaches everything to a GitHub
+      # Release, and emits the `latest.json` manifest the in-app updater reads.
+      - name: Build & release with tauri-action
+        id: tauri
+        if: steps.tag.outputs.value != ''
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: app
+          tagName: ${{ steps.tag.outputs.value }}
+          releaseName: ${{ steps.tag.outputs.value }}
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
+
+      # Fallback build (no signing, no updater manifest) when triggered manually
+      # without a tag — keeps the existing "just build an artifact" behaviour.
+      - name: Build only (no release)
+        if: steps.tag.outputs.value == ''
+        working-directory: app
         run: pnpm tauri build
 
-      - name: Upload artifacts
+      - name: Upload installers as workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-installer
-          path: app/src-tauri/target/release/bundle/nsis/*.exe
-
-      - name: Create GitHub Release and attach installers
-        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name != '' && github.ref_name || inputs.tag }}
-          name: ${{ github.ref_name != '' && github.ref_name || inputs.tag }}
-          generate_release_notes: true
-          files: app/src-tauri/target/release/bundle/nsis/*.exe
+          path: |
+            app/src-tauri/target/release/bundle/nsis/*.exe
+            app/src-tauri/target/release/bundle/nsis/*.nsis.zip
+            app/src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
