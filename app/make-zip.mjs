@@ -9,8 +9,8 @@ import path from 'path';
 import zlib from 'zlib';
 
 const NSIS_DIR = path.resolve('src-tauri/target/release/bundle/nsis');
-const EXE_NAME = 'QuanLyCongViec_0.1.2_x64-setup.exe';
-const ZIP_NAME = 'QuanLyCongViec_0.1.2_x64-setup.nsis.zip';
+const EXE_NAME = 'QuanLyCongViec_0.1.3_x64-setup.exe';
+const ZIP_NAME = 'QuanLyCongViec_0.1.3_x64-setup.nsis.zip';
 
 const exePath = path.join(NSIS_DIR, EXE_NAME);
 const zipPath = path.join(NSIS_DIR, ZIP_NAME);

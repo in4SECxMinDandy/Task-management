@@ -111,8 +111,8 @@ export function TasksPage() {
         }
         actions={
           isAdmin && (
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4" /> Tạo công việc
+            <Button size="lg" className="text-base h-11 px-6" onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-2 h-5 w-5" /> Tạo công việc
             </Button>
           )
         }
@@ -120,18 +120,18 @@ export function TasksPage() {
 
       {/* Filters / search row — placed directly under the title per the
           F-pattern: users scan title → primary action → filters. */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-64 flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            className="pl-9"
+            className="h-11 pl-10 text-base"
             placeholder="Tìm theo tiêu đề, mô tả, người được giao..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as TaskStatus | "all")}>
-          <SelectTrigger className="w-44">
+          <SelectTrigger className="h-11 w-48 text-base">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -148,18 +148,18 @@ export function TasksPage() {
       {isLoading ? (
         // Skeleton loading instead of generic spinner — gives the user a
         // preview of where content will appear (Design System §2).
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i}>
-              <CardContent className="space-y-3 p-4">
+              <CardContent className="space-y-4 p-5">
                 <div className="flex items-start justify-between gap-3">
-                  <Skeleton className="h-4 w-2/3" />
-                  <Skeleton className="h-5 w-16" />
+                  <Skeleton className="h-5 w-2/3" />
+                  <Skeleton className="h-6 w-20" />
                 </div>
-                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-4 w-full" />
                 <div className="flex items-center justify-between">
-                  <Skeleton className="h-6 w-24" />
-                  <Skeleton className="h-2 w-24" />
+                  <Skeleton className="h-8 w-32" />
+                  <Skeleton className="h-3 w-28" />
                 </div>
               </CardContent>
             </Card>
@@ -167,7 +167,7 @@ export function TasksPage() {
         </div>
       ) : filtered.length === 0 ? (
         <Card>
-          <CardContent className="p-0">
+          <CardContent className="p-8">
             <EmptyState
               icon={ListTodo}
               title={
@@ -184,12 +184,14 @@ export function TasksPage() {
               }
               action={
                 isAdmin && !search && statusFilter === "all" ? (
-                  <Button onClick={() => setCreateOpen(true)}>
-                    <Plus className="h-4 w-4" /> Tạo công việc
+                  <Button size="lg" className="mt-4 text-base h-11 px-6" onClick={() => setCreateOpen(true)}>
+                    <Plus className="mr-2 h-5 w-5" /> Tạo công việc
                   </Button>
                 ) : (search || statusFilter !== "all") ? (
                   <Button
                     variant="outline"
+                    size="lg"
+                    className="mt-4 text-base h-11"
                     onClick={() => {
                       setSearch("");
                       setStatusFilter("all");

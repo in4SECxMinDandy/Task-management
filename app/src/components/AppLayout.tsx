@@ -57,28 +57,28 @@ export function AppLayout() {
       <aside
         className={cn(
           "flex shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground transition-all",
-          collapsed ? "w-16" : "w-60",
+          collapsed ? "w-16" : "w-64", // increased from 60 to 64
         )}
       >
-        <div className="flex h-14 items-center justify-between border-b px-3">
-          <div className="flex items-center gap-2 overflow-hidden">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <CheckCircle2 className="h-4 w-4" />
+        <div className="flex h-16 items-center justify-between border-b px-4">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+              <CheckCircle2 className="h-5 w-5" />
             </div>
-            {!collapsed && <span className="truncate text-sm font-semibold">QL Công Việc</span>}
+            {!collapsed && <span className="truncate text-base font-semibold">QL Công Việc</span>}
           </div>
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 shrink-0"
+            className="h-8 w-8 shrink-0"
             onClick={() => setCollapsed((c) => !c)}
             aria-label="Toggle sidebar"
           >
-            <ChevronLeft className={cn("h-4 w-4 transition-transform", collapsed && "rotate-180")} />
+            <ChevronLeft className={cn("h-5 w-5 transition-transform", collapsed && "rotate-180")} />
           </Button>
         </div>
 
-        <nav className="flex-1 space-y-1 p-2">
+        <nav className="flex-1 space-y-1.5 p-3">
           {items.map((item) => (
             <NavLink
               key={item.to}
@@ -86,7 +86,7 @@ export function AppLayout() {
               end={item.to === "/"}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-md px-3 py-2.5 text-base font-medium transition-colors",
                   isActive
                     ? "bg-sidebar-accent text-sidebar-accent-foreground"
                     : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
@@ -94,20 +94,20 @@ export function AppLayout() {
                 )
               }
             >
-              <item.icon className="h-4 w-4 shrink-0" />
+              <item.icon className="h-5 w-5 shrink-0" />
               {!collapsed && <span>{item.label}</span>}
             </NavLink>
           ))}
         </nav>
 
-        <div className="border-t p-2">
+        <div className="border-t p-3">
           <Button
             variant="ghost"
             size="sm"
-            className={cn("w-full justify-start gap-2", collapsed && "justify-center")}
+            className={cn("w-full justify-start gap-3 py-5 text-base", collapsed && "justify-center")}
             onClick={toggle}
           >
-            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             {!collapsed && <span>{theme === "dark" ? "Sáng" : "Tối"}</span>}
           </Button>
         </div>
