@@ -27,6 +27,29 @@ export async function removeTaskFiles(paths: string[]): Promise<void> {
 }
 
 /**
+ * Xóa toàn bộ task: xóa file trên Storage trước, sau đó xóa row trong DB.
+ * Cascade trong DB sẽ tự xóa task_attachments, task_comments, task_assignees.
+ */
+export async function deleteTaskWithFiles(taskId: string): Promise<void> {
+  // 1. Lấy danh sách storage_path của tất cả file đính kèm
+  const { data: attachments, error: fetchErr } = await supabase
+    .from("task_attachments")
+    .select("storage_path")
+    .eq("task_id", taskId);
+  if (fetchErr) throw fetchErr;
+
+  // 2. Xóa file trên Storage (bỏ qua lỗi nếu file đã không còn)
+  const paths = (attachments ?? []).map((a) => a.storage_path);
+  if (paths.length > 0) {
+    await supabase.storage.from(TASK_BUCKET).remove(paths);
+  }
+
+  // 3. Xóa task row (cascade xóa các bảng liên quan)
+  const { error: deleteErr } = await supabase.from("tasks").delete().eq("id", taskId);
+  if (deleteErr) throw deleteErr;
+}
+
+/**
  * `true` when running inside the Tauri desktop webview.
  *
  * Tauri injects `__TAURI_INTERNALS__` on the window object; in plain browser

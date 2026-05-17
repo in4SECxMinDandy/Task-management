@@ -37,10 +37,14 @@ $exePath  = Join-Path $nsisDir $exeName
 $zipPath  = Join-Path $nsisDir $zipName
 $sigPath  = Join-Path $nsisDir $sigName
 
-# --- Tao file .zip tu .exe ---
 if (-not (Test-Path $zipPath)) {
-    Write-Host ">> Tao $zipName..." -ForegroundColor Cyan
-    Compress-Archive -Path $exePath -DestinationPath $zipPath -Force
+    Write-Host ">> Tao $zipName bang .NET ZipFile (chuan Deflate)..." -ForegroundColor Cyan
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $tempDir = Join-Path $nsisDir "temp_zip"
+    New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+    Copy-Item $exePath $tempDir
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($tempDir, $zipPath, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+    Remove-Item -Recurse -Force $tempDir
 }
 
 # --- Xoa .sig cu neu co ---
@@ -73,7 +77,8 @@ $latestJson = @{
 } | ConvertTo-Json -Depth 5
 
 $latestPath = Join-Path $nsisDir "latest.json"
-$latestJson | Set-Content $latestPath -Encoding UTF8
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText((Resolve-Path $nsisDir).Path + "\latest.json", $latestJson, $utf8NoBom)
 
 Write-Host ""
 Write-Host "=== BUILD HOAN TAT ===" -ForegroundColor Green

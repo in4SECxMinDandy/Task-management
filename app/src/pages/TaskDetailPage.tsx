@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Paperclip,
   Send,
+  Trash2,
   Upload,
   XCircle,
 } from "lucide-react";
@@ -22,6 +23,17 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import {
@@ -33,7 +45,7 @@ import {
   formatBytes,
 } from "@/lib/format";
 import { formatDateTime, initials, formatRelative } from "@/lib/utils";
-import { downloadTaskFile, removeTaskFiles, uploadTaskFile } from "@/lib/storage";
+import { deleteTaskWithFiles, downloadTaskFile, removeTaskFiles, uploadTaskFile } from "@/lib/storage";
 import type {
   Profile,
   Task,
@@ -46,6 +58,7 @@ type CommentWithUser = TaskComment & { user: Pick<Profile, "id" | "full_name"> |
 
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const { profile } = useAuth();
 
@@ -281,6 +294,20 @@ export function TaskDetailPage() {
     }
   };
 
+  const onDelete = async () => {
+    setBusy(true);
+    try {
+      await deleteTaskWithFiles(task.id);
+      toast.success("Đã xóa công việc");
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      navigate("/tasks", { replace: true });
+    } catch (err) {
+      const e = err as { message?: string };
+      toast.error(e.message ?? "Xóa thất bại");
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Breadcrumbs (Design System §3) — replace the ad-hoc "Quay lại"
@@ -305,9 +332,38 @@ export function TaskDetailPage() {
                 {overdue && <Badge variant="destructive">Quá hạn</Badge>}
               </div>
             </div>
-            <div className="text-right text-xs text-muted-foreground">
-              <div>Hạn: {formatDateTime(task.deadline)}</div>
-              <div>Tạo: {formatDateTime(task.created_at)}</div>
+            <div className="flex items-start gap-3">
+              {isAdmin && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm" disabled={busy}>
+                      <Trash2 className="h-4 w-4" /> Xóa
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Xóa công việc này?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Toàn bộ file đính kèm, bình luận và lịch sử của công việc{" "}
+                        <strong>"{task.title}"</strong> sẽ bị xóa vĩnh viễn. Không thể hoàn tác.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Hủy</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        onClick={onDelete}
+                      >
+                        Xóa vĩnh viễn
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+              <div className="text-right text-xs text-muted-foreground">
+                <div>Hạn: {formatDateTime(task.deadline)}</div>
+                <div>Tạo: {formatDateTime(task.created_at)}</div>
+              </div>
             </div>
           </div>
 

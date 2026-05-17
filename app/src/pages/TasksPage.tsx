@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { ListTodo, Plus, Search } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ListTodo, Plus, Search, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -18,6 +19,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { initials, formatDateTime } from "@/lib/utils";
@@ -28,14 +39,34 @@ import {
   STATUS_COLOR,
   STATUS_LABEL,
 } from "@/lib/format";
+import { deleteTaskWithFiles } from "@/lib/storage";
 import type { Task, TaskStatus } from "@/types/database";
 import { CreateTaskDialog } from "./admin/CreateTaskDialog";
 
 export function TasksPage() {
   const { isAdmin } = useAuth();
+  const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
   const [createOpen, setCreateOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const onConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteTaskWithFiles(deleteTarget.id);
+      toast.success("Đã xóa công việc");
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+    } catch (err) {
+      const e = err as { message?: string };
+      toast.error(e.message ?? "Xóa thất bại");
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
 
   type TaskRow = Task & {
     assignees: Array<{ user_id: string; user: { full_name: string; email: string } | null }>;
@@ -176,43 +207,82 @@ export function TasksPage() {
           {filtered.map((t) => {
             const overdue = isOverdue(t.deadline, t.status);
             return (
-              <Link key={t.id} to={`/tasks/${t.id}`}>
-                <Card className="cursor-pointer transition-colors hover:bg-accent/40 active:bg-accent/60">
-                  <CardContent className="space-y-2 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate font-medium">{t.title}</div>
-                        {t.description && (
-                          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                            {t.description}
-                          </p>
-                        )}
+              <div key={t.id} className="relative">
+                <Link to={`/tasks/${t.id}`}>
+                  <Card className="cursor-pointer transition-colors hover:bg-accent/40 active:bg-accent/60">
+                    <CardContent className="space-y-2 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate font-medium">{t.title}</div>
+                          {t.description && (
+                            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                              {t.description}
+                            </p>
+                          )}
+                        </div>
+                        <Badge variant={STATUS_COLOR[t.status]}>{STATUS_LABEL[t.status]}</Badge>
                       </div>
-                      <Badge variant={STATUS_COLOR[t.status]}>{STATUS_LABEL[t.status]}</Badge>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <Badge variant={PRIORITY_COLOR[t.priority]}>
-                        {PRIORITY_LABEL[t.priority]}
-                      </Badge>
-                      {overdue && <Badge variant="destructive">Quá hạn</Badge>}
-                      {t.deadline && <span>Hạn: {formatDateTime(t.deadline)}</span>}
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <AssigneesSummary assignees={t.assignees} />
-                      <div className="flex items-center gap-2">
-                        <Progress className="w-24" value={t.progress} />
-                        <span className="text-xs text-muted-foreground">{t.progress}%</span>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant={PRIORITY_COLOR[t.priority]}>
+                          {PRIORITY_LABEL[t.priority]}
+                        </Badge>
+                        {overdue && <Badge variant="destructive">Quá hạn</Badge>}
+                        {t.deadline && <span>Hạn: {formatDateTime(t.deadline)}</span>}
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
+                      <div className="flex items-center justify-between gap-2">
+                        <AssigneesSummary assignees={t.assignees} />
+                        <div className="flex items-center gap-2">
+                          <Progress className="w-24" value={t.progress} />
+                          <span className="text-xs text-muted-foreground">{t.progress}%</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+                {isAdmin && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-2 top-2 h-7 w-7 text-muted-foreground hover:text-destructive"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setDeleteTarget({ id: t.id, title: t.title });
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             );
           })}
         </div>
       )}
 
       {isAdmin && <CreateTaskDialog open={createOpen} onOpenChange={setCreateOpen} />}
+
+      {isAdmin && (
+        <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Xóa công việc này?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Toàn bộ file đính kèm, bình luận và lịch sử của công việc{" "}
+                <strong>"{deleteTarget?.title}"</strong> sẽ bị xóa vĩnh viễn. Không thể hoàn tác.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Hủy</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={onConfirmDelete}
+                disabled={deleting}
+              >
+                Xóa vĩnh viễn
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }
