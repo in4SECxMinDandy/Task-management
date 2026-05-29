@@ -84,7 +84,63 @@ jobs:
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
 
-      # Fallback build (no signing, no updater manifest) when triggered manually
+      # tauri-action tạo .nsis.zip bằng PowerShell Compress-Archive (Deflate64).
+      # tauri-plugin-updater chỉ hỗ trợ Deflate tiêu chuẩn (ZIP 2.0).
+      # Bước này repack lại bằng 7-Zip (có sẵn trên windows-latest runner)
+      # để đảm bảo compression method = Deflate, sau đó ký lại bằng Tauri CLI.
+      - name: Repack .nsis.zip with standard Deflate (fix Deflate64 incompatibility)
+        if: steps.tag.outputs.value != ''
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $bundle = "app/src-tauri/target/release/bundle/nsis"
+          $zip = Get-ChildItem "$bundle/*.nsis.zip" | Select-Object -First 1
+          if (-not $zip) { Write-Host "No .nsis.zip found, skipping repack"; exit 0 }
+
+          $tmpDir = "$bundle/repack_tmp"
+          New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
+
+          # Extract with 7-Zip
+          & "C:\Program Files\7-Zip\7z.exe" x $zip.FullName -o"$tmpDir" -y
+
+          # Repack with Deflate (not Deflate64) — method=Deflate, level=5
+          $newZip = $zip.FullName
+          Remove-Item $newZip -Force
+          & "C:\Program Files\7-Zip\7z.exe" a -tzip -mm=Deflate -mx=5 $newZip "$tmpDir\*"
+          Remove-Item $tmpDir -Recurse -Force
+
+          # Re-sign: TAURI_SIGNING_PRIVATE_KEY env var is already set above,
+          # tauri-plugin-updater signer reads it automatically.
+          $sigFile = "$newZip.sig"
+          Remove-Item $sigFile -ErrorAction SilentlyContinue
+          $absZip = (Resolve-Path $newZip).Path
+          Push-Location app
+          pnpm tauri signer sign $absZip
+          Pop-Location
+
+          # Patch latest.json signature field with the new .sig content
+          $latestJson = "$bundle/latest.json"
+          if (Test-Path $latestJson) {
+            $newSig = (Get-Content "$newZip.sig" -Raw).Trim()
+            $json = Get-Content $latestJson -Raw | ConvertFrom-Json
+            foreach ($platform in $json.platforms.PSObject.Properties) {
+              $platform.Value.signature = $newSig
+            }
+            $json | ConvertTo-Json -Depth 10 | Set-Content $latestJson -Encoding UTF8NoBOM
+          }
+
+      # Re-upload the patched latest.json and repacked .nsis.zip to the release
+      - name: Upload repacked assets to GitHub Release
+        if: steps.tag.outputs.value != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.value }}
+          files: |
+            app/src-tauri/target/release/bundle/nsis/*.nsis.zip
+            app/src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
+            app/src-tauri/target/release/bundle/nsis/latest.json
       # without a tag — keeps the existing "just build an artifact" behaviour.
       - name: Build only (no release)
         if: steps.tag.outputs.value == ''
